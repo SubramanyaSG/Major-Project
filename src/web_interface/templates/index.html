@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotional Text-to-Speech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎵 Emotional Text-to-Speech</h1>
+            <p>Generate expressive speech with AI-powered emotion control</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Text Input Block -->
+            <div class="input-block text-block">
+                <div class="block-title">Text Input</div>
+                <textarea id="textInput" placeholder="Enter your text here (max 1,000 characters)..."></textarea>
+                
+                <div class="emotion-select">
+                    <label for="textEmotion">Select Emotion:</label>
+                    <select id="textEmotion">
+                        <option value="neutral">😐 Neutral</option>
+                        <option value="happy">😊 Happy</option>
+                        <option value="angry">😠 Angry</option>
+                        <option value="sad">😢 Sad</option>
+                        <option value="surprise">😲 Surprise</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-secondary" onclick="resetText()">🔄 Reset</button>
+                    <button class="btn-primary" onclick="synthesizeText()">🎤 Generate</button>
+                </div>
+            </div>
+
+            <!-- FILE UPLOAD BLOCK - Enhanced -->
+<div class="input-block file-block">
+    <div class="block-title">File Upload</div>
+    
+    <!-- File upload area -->
+    <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".txt,.docx,.pdf" onchange="handleFileSelect(event)">
+        <p style="font-size: 2em; margin-bottom: 10px;">📁</p>
+        <p><strong>Click to upload or drag & drop</strong></p>
+        <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+            Supported formats: <strong>.txt, .docx, .pdf</strong><br>
+            Maximum file size: <strong>50MB</strong>
+        </p>
+    </div>
+    
+    <!-- File info display -->
+    <div id="fileInfo" style="margin-top: 15px; padding: 15px; background: #f0f2ff; border-radius: 10px; display: none;">
+        <p><strong>📄 File:</strong> <span id="fileName"></span></p>
+        <p><strong>📊 Size:</strong> <span id="fileSize"></span></p>
+        <p><strong>✅ Status:</strong> <span id="fileStatus" style="color: #4ecdc4;">Ready to process</span></p>
+    </div>
+    
+    <!-- Emotion select -->
+    <div class="emotion-select">
+        <label for="fileEmotion">Select Emotion:</label>
+        <select id="fileEmotion">
+            <option value="neutral">😐 Neutral</option>
+            <option value="happy">😊 Happy</option>
+            <option value="angry">😠 Angry</option>
+            <option value="sad">😢 Sad</option>
+            <option value="surprise">😲 Surprise</option>
+        </select>
+    </div>
+
+    <!-- Buttons -->
+    <div class="button-group">
+        <button class="btn-secondary" onclick="resetFile()">🔄 Reset</button>
+        <button class="btn-primary" onclick="processFile()">📤 Process File</button>
+    </div>
+</div>
+
+
+        <!-- Loading Section -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>🎤 Generating emotional speech...</p>
+        </div>
+
+        <!-- Output Section -->
+        <div class="output-section" id="outputSection">
+            <div class="block-title">🎵 Generated Speech</div>
+            
+            <!-- Text Display with Highlighting -->
+            <div class="text-preview" id="textPreview"></div>
+            
+            <!-- Waveform Visualization -->
+            <div class="waveform-container">
+                <canvas class="waveform" id="waveform"></canvas>
+            </div>
+            
+            <!-- Audio Player -->
+            <audio id="audioPlayer"></audio>
+            
+            <!-- Progress Bar -->
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <!-- Time Display -->
+            <div class="time-display">
+                <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
+            </div>
+            
+            <!-- Controls -->
+            <div class="controls">
+                <button class="control-btn" onclick="playAudio()" title="Play">▶️</button>
+                <button class="control-btn" onclick="pauseAudio()" title="Pause">⏸️</button>
+                <button class="control-btn" onclick="stopAudio()" title="Stop">⏹️</button>
+                <button class="control-btn" onclick="downloadAudio()" title="Download">⬇️</button>
+            </div>
+            
+            <!-- Emotion Info -->
+            <div class="emotion-info" id="emotionInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedFile = null;
+        let currentAudio = null;
+        let audioData = null;
+        let animationId = null;
+        let isPlaying = false;
+
+        // ========== UTILITY FUNCTIONS ==========
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '0:00';
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        function resetText() {
+            document.getElementById('textInput').value = '';
+            document.getElementById('outputSection').classList.remove('active');
+        }
+
+        function resetFile() {
+            document.getElementById('fileInput').value = '';
+            uploadedFile = null;
+            document.getElementById('outputSection').classList.remove('active');
+        }
+
+        function handleFileSelect(event) {
+            uploadedFile = event.target.files[0];
+            if (uploadedFile) {
+                console.log(`✅ File selected: ${uploadedFile.name}`);
+            }
+        }
+
+        // ========== TEXT HIGHLIGHTING ==========
+        function highlightText(text) {
+            // Split text into words
+            const words = text.split(/(\s+)/);
+            const highlighted = words.map((word, index) => {
+                if (word.trim() === '') return word;
+                return `<span class="word" data-index="${index}">${word}</span>`;
+            });
+            return highlighted.join('');
+        }
+
+        function highlightWordAtIndex(index) {
+            // Remove previous highlights
+            document.querySelectorAll('.highlighted-text').forEach(el => {
+                el.classList.remove('highlighted-text');
+            });
+            
+            // Add highlight to current word
+            const words = document.querySelectorAll('.word');
+            if (words[index]) {
+                words[index].classList.add('highlighted-text');
+                // Scroll into view
+                words[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // ========== WAVEFORM VISUALIZATION ==========
+        function drawWaveform(waveformData) {
+            const canvas = document.getElementById('waveform');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#f8f9ff');
+            gradient.addColorStop(1, '#eef2ff');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Center line
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+            
+            // Draw waveform
+            const waveGradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            waveGradient.addColorStop(0, '#667eea');
+            waveGradient.addColorStop(0.5, '#764ba2');
+            waveGradient.addColorStop(1, '#f093fb');
+            
+            ctx.strokeStyle = waveGradient;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerY = height / 2;
+            
+            for (let i = 0; i < waveformData.length; i++) {
+                const x = (i / waveformData.length) * width;
+                const y = centerY - (waveformData[i] * centerY * 0.8);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+            
+            // Fill area under wave
+            ctx.lineTo(width, centerY);
+            ctx.lineTo(0, centerY);
+            ctx.closePath();
+            
+            const fillGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            fillGradient.addColorStop(0, 'rgba(102, 126, 234, 0.2)');
+            fillGradient.addColorStop(1, 'rgba(240, 147, 251, 0.1)');
+            ctx.fillStyle = fillGradient;
+            ctx.fill();
+            
+            console.log(`✅ Waveform drawn: ${waveformData.length} samples`);
+        }
+
+        // ========== ANIMATED WAVEFORM DURING PLAYBACK ==========
+        function animateWaveformDuringPlayback() {
+            if (!currentAudio || !audioData) return;
+            
+            const canvas = document.getElementById('waveform');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const waveformData = audioData.waveform;
+            
+            function animate() {
+                if (!isPlaying) return;
+                
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                
+                // Background
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#f8f9ff');
+                gradient.addColorStop(1, '#eef2ff');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Center line
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height / 2);
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+                
+                const width = canvas.width;
+                const height = canvas.height;
+                const centerY = height / 2;
+                
+                // Calculate progress
+                const progress = currentAudio.currentTime / currentAudio.duration;
+                const progressX = progress * width;
+                
+                // Draw passed portion (bright)
+                const waveGradient1 = ctx.createLinearGradient(0, 0, progressX, 0);
+                waveGradient1.addColorStop(0, '#667eea');
+                waveGradient1.addColorStop(1, '#764ba2');
+                
+                ctx.strokeStyle = waveGradient1;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                
+                for (let i = 0; i < waveformData.length * progress; i++) {
+                    const x = (i / waveformData.length) * width;
+                    const y = centerY - (waveformData[i] * centerY * 0.8);
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+                
+                // Draw remaining portion (faded)
+                const waveGradient2 = ctx.createLinearGradient(progressX, 0, width, 0);
+                waveGradient2.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+                waveGradient2.addColorStop(1, 'rgba(240, 147, 251, 0.2)');
+                
+                ctx.strokeStyle = waveGradient2;
+                ctx.beginPath();
+                
+                for (let i = Math.floor(waveformData.length * progress); i < waveformData.length; i++) {
+                    const x = (i / waveformData.length) * width;
+                    const y = centerY - (waveformData[i] * centerY * 0.8);
+                    
+                    if (i === Math.floor(waveformData.length * progress)) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+                
+                // Draw progress line
+                ctx.strokeStyle = 'rgba(102, 126, 234, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(progressX, 0);
+                ctx.lineTo(progressX, height);
+                ctx.stroke();
+                
+                // Draw circle at progress point
+                ctx.fillStyle = '#667eea';
+                ctx.beginPath();
+                ctx.arc(progressX, centerY, 6, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                animationId = requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+
+        // ========== SYNTHESIS ==========
+        async function synthesizeText() {
+            const text = document.getElementById('textInput').value;
+            const emotion = document.getElementById('textEmotion').value;
+
+            if (!text.trim()) {
+                alert('❌ Please enter some text!');
+                return;
+            }
+
+            console.log(`🎤 Frontend: Synthesizing "${text.substring(0, 50)}..."`);
+            console.log(`   Emotion: ${emotion}`);
+
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('outputSection').classList.remove('active');
+
+            try {
+                const response = await fetch('/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, emotion })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`✅ Frontend: Audio received`);
+                    displayAudio(data);
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error);
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+            }
+        }
+
+        // ========== ENHANCED FILE UPLOAD HANDLERS ==========
+
+function handleFileSelect(event) {
+    uploadedFile = event.target.files[0];
+    
+    if (uploadedFile) {
+        const fileSize = (uploadedFile.size / 1024 / 1024).toFixed(2);
+        const fileExt = uploadedFile.name.split('.').pop().toLowerCase();
+        
+        console.log(`📄 File selected:`);
+        console.log(`   - Name: ${uploadedFile.name}`);
+        console.log(`   - Size: ${fileSize}MB`);
+        console.log(`   - Type: ${fileExt}`);
+        
+        // Validate file
+        const validExts = ['txt', 'docx', 'pdf'];
+        if (!validExts.includes(fileExt)) {
+            alert(`❌ Invalid file type: .${fileExt}\n\nSupported types: .txt, .docx, .pdf`);
+            resetFile();
+            return;
+        }
+        
+        if (uploadedFile.size > 50 * 1024 * 1024) {
+            alert('❌ File too large! Maximum: 50MB');
+            resetFile();
+            return;
+        }
+        
+        // Show file info
+        document.getElementById('fileName').textContent = uploadedFile.name;
+        document.getElementById('fileSize').textContent = `${fileSize}MB`;
+        document.getElementById('fileStatus').textContent = '✅ Ready to process';
+        document.getElementById('fileInfo').style.display = 'block';
+        
+        console.log(`✅ File validated and ready`);
+    }
+}
+
+// ========== DRAG & DROP SUPPORT ==========
+
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('dropZone');
+    
+    if (!dropZone) return;
+    
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    // Highlight drop zone on drag over
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#667eea';
+            dropZone.style.background = '#f0f2ff';
+            dropZone.style.transform = 'scale(1.02)';
+        });
+    });
+    
+    // Remove highlight when leaving
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#667eea';
+            dropZone.style.background = '#f8f9ff';
+            dropZone.style.transform = 'scale(1)';
+        });
+    });
+    
+    // Handle dropped files
+    dropZone.addEventListener('drop', (e) => {
+        console.log('📥 Files dropped');
+        
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if (files.length > 0) {
+            document.getElementById('fileInput').files = files;
+            handleFileSelect({ target: { files: files } });
+        }
+    });
+});
+
+// ========== ENHANCED FILE PROCESSING ==========
+
+async function processFile() {
+    if (!uploadedFile) {
+        alert('❌ Please select a file first!');
+        return;
+    }
+
+    const emotion = document.getElementById('fileEmotion').value;
+    const formData = new FormData();
+    formData.append('file', uploadedFile);
+    formData.append('emotion', emotion);
+
+    console.log(`📤 Processing file: ${uploadedFile.name}`);
+
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('outputSection').classList.remove('active');
+    document.getElementById('fileStatus').textContent = '⏳ Processing...';
+
+    try {
+        // Step 1: Upload and extract
+        console.log(`Step 1: Uploading and extracting text...`);
+        
+        const uploadResponse = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const uploadData = await uploadResponse.json();
+
+        if (!uploadData.success) {
+            alert(`❌ Error: ${uploadData.error}`);
+            console.error('Upload error:', uploadData.error);
+            document.getElementById('fileStatus').textContent = '❌ Failed to upload';
+            return;
+        }
+
+        console.log(`✅ Step 1 complete: ${uploadData.char_count} characters extracted`);
+        document.getElementById('fileStatus').textContent = `✅ Extracted ${uploadData.char_count} characters`;
+
+        // Step 2: Synthesize
+        console.log(`Step 2: Synthesizing speech...`);
+        
+        const synthResponse = await fetch('/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                text: uploadData.text, 
+                emotion: uploadData.emotion 
+            })
+        });
+
+        const synthData = await synthResponse.json();
+
+        if (!synthData.success) {
+            alert(`❌ Error: ${synthData.error}`);
+            console.error('Synthesis error:', synthData.error);
+            document.getElementById('fileStatus').textContent = '❌ Failed to synthesize';
+            return;
+        }
+
+        console.log(`✅ Step 2 complete: Audio generated`);
+        document.getElementById('fileStatus').textContent = '✅ Complete!';
+        
+        displayAudio(synthData);
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+        console.error('Error:', error);
+        document.getElementById('fileStatus').textContent = '❌ Error processing file';
+    } finally {
+        document.getElementById('loading').classList.remove('active');
+    }
+}
+
+function resetFile() {
+    document.getElementById('fileInput').value = '';
+    uploadedFile = null;
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('outputSection').classList.remove('active');
+    console.log('🔄 File upload reset');
+}
+
+
+        // ========== DISPLAY AUDIO ==========
+        function displayAudio(data) {
+            console.log(`🎵 Frontend: Displaying audio`);
+            
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.src = data.audio_base64;
+            
+            audioData = data;
+            currentAudio = audioPlayer;
+            
+            // Display text with highlighting capability
+            const preview = data.text;
+            document.getElementById('textPreview').innerHTML = highlightText(preview);
+            
+            // Draw waveform
+            drawWaveform(data.waveform);
+            
+            // Display emotion info
+            const emotionNames = {
+                'neutral': '😐 Neutral - Calm & Professional',
+                'happy': '😊 Happy - Upbeat & Cheerful',
+                'angry': '😠 Angry - Intense & Forceful',
+                'sad': '😢 Sad - Soft & Melancholic',
+                'surprise': '😲 Surprise - Dynamic & Expressive'
+            };
+            
+            document.getElementById('emotionInfo').innerHTML = 
+                `${emotionNames[data.emotion]} | Duration: ${data.duration.toFixed(2)}s`;
+            
+            document.getElementById('outputSection').classList.add('active');
+            
+            console.log(`✅ Frontend: Ready to play`);
+        }
+
+        // ========== AUDIO CONTROLS ==========
+        function playAudio() {
+            if (currentAudio) {
+                currentAudio.play();
+                isPlaying = true;
+                animateWaveformDuringPlayback();
+                console.log('▶️ Playing');
+            }
+        }
+
+        function pauseAudio() {
+            if (currentAudio) {
+                currentAudio.pause();
+                isPlaying = false;
+                console.log('⏸️ Paused');
+            }
+        }
+
+        function stopAudio() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                isPlaying = false;
+                console.log('⏹️ Stopped');
+                drawWaveform(audioData.waveform); // Redraw static waveform
+            }
+        }
+
+        function downloadAudio() {
+            if (audioData && audioData.audio_filename) {
+                const link = document.createElement('a');
+                link.href = audioData.audio_base64;
+                link.download = audioData.audio_filename;
+                link.click();
+                console.log(`⬇️ Downloaded: ${audioData.audio_filename}`);
+            }
+        }
+
+        // ========== AUDIO EVENT LISTENERS ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            const audio = document.getElementById('audioPlayer');
+            
+            audio.addEventListener('timeupdate', function() {
+                // Update time display
+                const current = formatTime(audio.currentTime);
+                const duration = formatTime(audio.duration);
+                document.getElementById('currentTime').textContent = current;
+                document.getElementById('duration').textContent = duration;
+                
+                // Update progress bar
+                const progress = (audio.currentTime / audio.duration) * 100 || 0;
+                document.getElementById('progressFill').style.width = progress + '%';
+                
+                // Highlight words based on time
+                if (audioData && audioData.text) {
+                    const words = audioData.text.split(/(\s+)/);
+                    const wordDuration = audio.duration / words.length;
+                    const currentWordIndex = Math.floor(audio.currentTime / wordDuration);
+                    highlightWordAtIndex(currentWordIndex);
+                }
+            });
+            
+            audio.addEventListener('ended', function() {
+                isPlaying = false;
+                console.log('✅ Audio finished');
+            });
+        });
+
+        console.log('✅ Frontend loaded and ready!');
+    </script>
+</body>
+</html>
