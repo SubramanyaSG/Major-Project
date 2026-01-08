@@ -1,0 +1,10 @@
+{
+  "dataset_path": "D:/7th Sem/Major Project - 2/Code/ets/Emotion Speech Dataset1/English",
+  "speakers": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  "emotions": ["neutral", "happy", "angry", "sad", "surprise"],
+  "sampling_rate": 22050,
+  "n_mels": 80,
+  "n_fft": 1024,
+  "hop_length": 256,
+  "win_length": 1024
+}
